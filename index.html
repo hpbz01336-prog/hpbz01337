@@ -981,7 +981,7 @@ function rankScreen(){
     const mine = res.me && res.me.rank > res.top.length ? `<li class="gap">⋮</li>${row(res.me)}` : '';
     $('#rbody').innerHTML = `<ol class="rank">${res.top.map(row).join('')}${mine}</ol>`;
     const meRow = $('#rbody .mine'); if (meRow && meRow.scrollIntoView) meRow.scrollIntoView({block:'nearest'});
-  }).catch(() => { if (my === token) $('#rbody').innerHTML = note('랭킹을 불러오지 못했어요.<br>잠시 후 다시 열어 주세요.'); });
+  }).catch(e => { if (my === token) $('#rbody').innerHTML = note(`랭킹을 불러오지 못했어요.<br>잠시 후 다시 열어 주세요.<br><small>(${esc(/^\d+$/.test(e && e.message) ? '서버 응답 ' + e.message : '서버 연결 실패')})</small>`); });
 }
 
 /* ================= dex ================= */
