@@ -1,0 +1,4 @@
+# Netlify only runs the ranking server (netlify/functions). The game itself is served by GitHub Pages.
+[build]
+  publish = "."
+  functions = "netlify/functions"

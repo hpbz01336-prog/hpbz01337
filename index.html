@@ -233,6 +233,22 @@ h1,h2,h3{font-family:var(--f-display);font-weight:400;text-wrap:balance}
 .slot.seen .lt{color:var(--yellow)}
 .slot h3{font-size:16px;line-height:1.2}
 .slot .range{font-size:11.5px;color:var(--chalk-dim);font-variant-numeric:tabular-nums}
+
+/* room ranking */
+.btn.sm{font-size:16px;padding:11px 8px}
+.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rank li{display:grid;grid-template-columns:30px 34px 1fr auto 52px;align-items:center;gap:8px;padding:7px 10px;border-radius:12px;background:var(--glass);border:1px solid var(--chalk-faint)}
+.rank li.mine{border:2px solid var(--yellow)}
+.rank li.gap{background:none;border:0;padding:0;display:block;text-align:center;color:var(--chalk-dim);font-size:12px;line-height:1}
+.rank .no{font-family:var(--f-display);font-size:20px;text-align:center;color:var(--chalk-dim);font-variant-numeric:tabular-nums}
+.rank li:nth-child(1) .no{color:var(--yellow)}
+.rank .face{width:34px;height:34px;border-radius:50%;background-color:var(--board-hi);background-repeat:no-repeat;background-size:290%;background-position:50% 7%}
+.rank .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank .nm small{font-weight:500;color:var(--yellow);margin-left:4px}
+.rank .gr{font-family:var(--f-display);font-size:15px;color:var(--chalk-dim);border:1px solid var(--chalk-line);border-radius:7px;padding:0 6px}
+.rank .sc{font-family:var(--f-display);font-size:18px;text-align:right;font-variant-numeric:tabular-nums}
+.rank-note{text-align:center;padding:22px 14px}
+.diploma .rankline{color:var(--tie);margin-top:4px;min-height:1em}
 .marks{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
 .marks span{font-size:10.5px;padding:0 6px;border-radius:99px;border:1px solid var(--chalk-line);color:var(--chalk-dim)}
 .marks span.on{background:var(--yellow);border-color:var(--yellow);color:var(--ink)}
@@ -578,10 +594,10 @@ function title(){
   screen({bg:'bg_title'}, `
     <div class="sign"><p class="eyebrow">동탄학생회 · 시험판 2판</p><h1>학생회<br><span>키우기</span></h1></div>
     <div class="trio"><img src="${IMG.str}" alt=""><img src="${IMG.int}" alt=""><img src="${IMG.bal}" alt=""></div>`,
-    `<button class="btn" id="new">새로 시작</button>
-     <div class="row"><button class="btn ghost" id="cont" ${saved?'':'disabled'}>${saved && saved.gi < 6 ? '이어하기 · ' + GRADES[saved.gi].label : '이어하기'}</button><button class="btn ghost" id="dex">엔딩 도감</button></div>
+    `<div class="row"><button class="btn" id="new">새로 시작</button><button class="btn ghost" id="cont" ${saved?'':'disabled'}>${saved && saved.gi < 6 ? '이어하기 · ' + GRADES[saved.gi].label : '이어하기'}</button></div>
+     <div class="row"><button class="btn ghost sm" id="rank">이 방 랭킹</button><button class="btn ghost sm" id="dex">엔딩 도감</button></div>
      <div class="row" style="justify-content:center"><button class="link" id="sndt" style="flex:none">소리 ${SND.on ? '켜짐' : '꺼짐'}</button>${inTelegram ? '' : '<button class="link" id="prev" style="flex:none">시험용 · 엔딩 화면 미리보기</button>'}</div>`, false);
-  on('new', select); on('dex', dex); on('prev', previewPicker);
+  on('new', select); on('dex', dex); on('rank', rankScreen); on('prev', previewPicker);
   on('sndt', () => { SND.toggle(); $('#sndt').textContent = '소리 ' + (SND.on ? '켜짐' : '꺼짐'); });
   on('cont', () => { S = store.get(SAVE, null); if (S) route(); });
 }
@@ -896,6 +912,9 @@ function ending(){
   const best = store.get(BEST, 0), isBest = total > best; if (isBest) store.set(BEST, total);
   const run = S; store.del(SAVE); S = null;
   endingScreen(idx, run.char, run.name, {base, bonus, total, isBest}, false);
+  const entry = {name: run.name, char: run.char, g: ENDINGS[idx].g, score: total};
+  if (rankReady()) store.set(PENDING, entry);   // kept until the server confirms, retried on next launch
+  submitRank(entry, $('#rankline'));
 }
 function endingScreen(idx, ch, name, sc, preview){
   const e = ENDINGS[idx], isF = e.g === 'F', isS = e.g === 'S';
@@ -911,11 +930,58 @@ function endingScreen(idx, ch, name, sc, preview){
         <p class="line">${esc(e.line[ch].replace('{이름}', name))}</p>
         <div class="score"><span>기본 <b>${sc.base}</b></span><span>스킬 보너스 <b>${sc.bonus}</b></span><span>최종 <b>${sc.total}</b></span></div>
         ${sc.isBest ? `<p class="eb" style="color:var(--tie);margin-top:4px">개인 최고 기록!</p>` : ''}
+        ${preview ? '' : `<p class="eb rankline" id="rankline"></p>`}
       </div>
     </div>`,
     preview ? `<button class="btn" id="back">다른 엔딩 보기</button><button class="link" id="home">처음으로</button>`
-            : `<button class="btn" id="again">다시 입학하기</button><div class="row"><button class="btn ghost" id="dex">엔딩 도감</button><button class="btn ghost" id="home">처음으로</button></div>`, false);
-  on('again', select); on('dex', dex); on('home', title); on('back', previewPicker);
+            : `<button class="btn" id="again">다시 입학하기</button><div class="row"><button class="btn ghost sm" id="rank">이 방 랭킹</button><button class="btn ghost sm" id="dex">엔딩 도감</button><button class="btn ghost sm" id="home">처음으로</button></div>`, false);
+  on('again', select); on('dex', dex); on('rank', rankScreen); on('home', title); on('back', previewPicker);
+}
+
+/* ================= room ranking =================
+   Scores are grouped by Telegram's chat_instance, which is only known to people who open
+   the game from a link inside that group chat, so strangers can never appear on a room's board. */
+const RANK_API = '';   // e.g. 'https://<site>.netlify.app/api/rank'
+const PENDING = 'hsk_rank_pending';
+const tgRoom = () => (TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.chat_instance) || '';
+const tgUid = () => String((TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.user && TG.app.initDataUnsafe.user.id) || '');
+const rankReady = () => !!(RANK_API && tgRoom() && tgUid());
+function rankCall(entry){
+  const room = encodeURIComponent(tgRoom()), uid = encodeURIComponent(tgUid());
+  const req = entry
+    ? fetch(RANK_API, {method:'POST', body: JSON.stringify({...entry, room: tgRoom(), uid: tgUid(), init: TG.app.initData || ''})})
+    : fetch(`${RANK_API}?room=${room}&uid=${uid}`);
+  return req.then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+}
+function submitRank(entry, lineEl){
+  if (!rankReady()) return;
+  if (lineEl) lineEl.textContent = '이 방 랭킹에 올리는 중…';
+  rankCall(entry).then(res => {
+    store.del(PENDING);
+    if (lineEl && lineEl.isConnected && res.me) lineEl.textContent = res.me.rank === 1 ? `이 방 랭킹 1위! (${res.total}명 중)` : `이 방 랭킹 ${res.me.rank}위 · ${res.total}명 중`;
+  }).catch(() => { if (lineEl && lineEl.isConnected) lineEl.textContent = '랭킹은 다음에 게임을 열 때 다시 올릴게요.'; });
+}
+function retryPendingRank(){ const p = store.get(PENDING, null); if (p && rankReady()) submitRank(p, null); }
+function rankScreen(){
+  const shell = body => screen({bg:'bg_title', shade:true}, `
+    <div><h2 style="font-size:26px">이 방 랭킹</h2><p class="muted" id="rsub">개인 최고점 기준</p></div>${body}`,
+    `<button class="btn ghost" id="home">처음으로</button>`, false);
+  const note = t => `<div class="glass rank-note"><p class="muted">${t}</p></div>`;
+  const done = () => on('home', title);
+  if (!RANK_API){ shell(note('랭킹 서버를 준비하고 있어요.')); return done(); }
+  if (!tgRoom() || !tgUid()){ shell(note('단톡방에 올라온 게임 링크로 열면<br>그 방 사람들끼리 랭킹을 볼 수 있어요.')); return done(); }
+  shell(`<div id="rbody">${note('불러오는 중…')}</div>`); done();
+  const my = token;
+  rankCall(null).then(res => {
+    if (my !== token) return;
+    $('#rsub').textContent = `${res.total}명 참여 · 개인 최고점 기준`;
+    if (!res.top.length){ $('#rbody').innerHTML = note('아직 이 방에서 졸업한 사람이 없어요.<br>첫 번째 졸업생이 되어 보세요!'); return; }
+    const row = r => `<li class="${r.me ? 'mine' : ''}"><span class="no">${r.rank}</span><span class="face" style="background-image:url(${IMG[r.char] || IMG.bal})"></span>
+      <span class="nm">${esc(r.name)}${r.me ? '<small>나</small>' : ''}</span><span class="gr">${r.g}</span><span class="sc">${r.score}</span></li>`;
+    const mine = res.me && res.me.rank > res.top.length ? `<li class="gap">⋮</li>${row(res.me)}` : '';
+    $('#rbody').innerHTML = `<ol class="rank">${res.top.map(row).join('')}${mine}</ol>`;
+    const meRow = $('#rbody .mine'); if (meRow && meRow.scrollIntoView) meRow.scrollIntoView({block:'nearest'});
+  }).catch(() => { if (my === token) $('#rbody').innerHTML = note('랭킹을 불러오지 못했어요.<br>잠시 후 다시 열어 주세요.'); });
 }
 
 /* ================= dex ================= */
@@ -990,6 +1056,7 @@ async function boot(){
     }
   }
   title();
+  retryPendingRank();
 }
 boot();
 </script>
