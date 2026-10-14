@@ -941,7 +941,7 @@ function endingScreen(idx, ch, name, sc, preview){
 /* ================= room ranking =================
    Scores are grouped by Telegram's chat_instance, which is only known to people who open
    the game from a link inside that group chat, so strangers can never appear on a room's board. */
-const RANK_API = '';   // e.g. 'https://<site>.netlify.app/api/rank'
+const RANK_API = 'https://tubular-raindrop-22f885.netlify.app/api/rank';   // Netlify function in netlify/functions/rank.mjs
 const PENDING = 'hsk_rank_pending';
 const tgRoom = () => (TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.chat_instance) || '';
 const tgUid = () => String((TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.user && TG.app.initDataUnsafe.user.id) || '');
