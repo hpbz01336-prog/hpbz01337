@@ -5,6 +5,9 @@
 //
 //   GET  /api/rank?room=..&uid=..   -> { top: [...10], me, total }
 //   POST /api/rank  {room, uid, name, char, g, score, init}  -> same shape
+//   GET  /api/rank?op=submit&d=<same JSON as POST>           -> same shape
+// Any GET may add &cb=<name> to get JSONP (name(<json>)) instead of JSON: some in-app
+// browsers fail cross-origin fetch, while a <script> tag always loads.
 //
 // If the BOT_TOKEN environment variable is set, POSTs must carry Telegram's signed
 // initData and room/uid are taken from it, so nobody can post as someone else.
@@ -13,9 +16,14 @@ import { getStore } from "@netlify/blobs";
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "*",
+  "Access-Control-Max-Age": "86400",
+  "Cache-Control": "no-store",
 };
-const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json; charset=utf-8" } });
+const CB_RE = /^[A-Za-z_$][0-9A-Za-z_$]{0,40}$/;
+const reply = (body, status, cb) => cb
+  ? new Response(`${cb}(${JSON.stringify({ ...body, status })});`, { status: 200, headers: { ...CORS, "Content-Type": "application/javascript; charset=utf-8" } })
+  : new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json; charset=utf-8" } });
 
 const ROOM_RE = /^-?[0-9A-Za-z_]{1,40}$/, UID_RE = /^[0-9]{1,20}$/;
 const CHARS = ["str", "int", "bal"], GRADES = ["F", "D", "C", "B", "A", "S"];
@@ -51,16 +59,20 @@ async function board(store, room, uid) {
 
 export default async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  const store = getStore({ name: "rank", consistency: "strong" });
+  const u = new URL(req.url);
+  const cb = req.method === "GET" && CB_RE.test(u.searchParams.get("cb") || "") ? u.searchParams.get("cb") : null;
+  const json = (body, status = 200) => reply(body, status, cb);
   try {
-    if (req.method === "GET") {
-      const u = new URL(req.url), room = u.searchParams.get("room") || "", uid = u.searchParams.get("uid") || "";
+    const store = getStore({ name: "rank", consistency: "strong" });
+    const submitViaGet = req.method === "GET" && u.searchParams.get("op") === "submit";
+    if (req.method === "GET" && !submitViaGet) {
+      const room = u.searchParams.get("room") || "", uid = u.searchParams.get("uid") || "";
       if (!ROOM_RE.test(room)) return json({ error: "room" }, 400);
       return json(await board(store, room, UID_RE.test(uid) ? uid : ""));
     }
-    if (req.method !== "POST") return json({ error: "method" }, 405);
+    if (req.method !== "POST" && !submitViaGet) return json({ error: "method" }, 405);
 
-    const b = JSON.parse(await req.text());
+    const b = JSON.parse(submitViaGet ? u.searchParams.get("d") || "{}" : await req.text());
     let room = String(b.room || ""), uid = String(b.uid || "");
     const token = globalThis.Netlify?.env?.get("BOT_TOKEN") || process.env.BOT_TOKEN;
     if (token) {

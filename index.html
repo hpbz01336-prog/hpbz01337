@@ -946,12 +946,26 @@ const PENDING = 'hsk_rank_pending';
 const tgRoom = () => (TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.chat_instance) || '';
 const tgUid = () => String((TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.user && TG.app.initDataUnsafe.user.id) || '');
 const rankReady = () => !!(RANK_API && tgRoom() && tgUid());
+let rankJsonp = false;   // after one failed cross-origin fetch, load results through a <script> tag instead
+function jsonp(url){
+  return new Promise((res, rej) => {
+    const name = '__hskRank' + Date.now().toString(36) + Math.floor(Math.random() * 1e6), s = document.createElement('script');
+    const clean = () => { clearTimeout(t); try{ delete window[name]; }catch(e){} s.remove(); };
+    const t = setTimeout(() => { clean(); rej(new Error('timeout')); }, 9000);
+    window[name] = d => { clean(); d && d.status >= 400 ? rej(new Error(String(d.status))) : res(d); };
+    s.onerror = () => { clean(); rej(new Error('script')); };
+    s.src = url + '&cb=' + name;
+    document.head.appendChild(s);
+  });
+}
 function rankCall(entry){
-  const room = encodeURIComponent(tgRoom()), uid = encodeURIComponent(tgUid());
-  const req = entry
-    ? fetch(RANK_API, {method:'POST', body: JSON.stringify({...entry, room: tgRoom(), uid: tgUid(), init: TG.app.initData || ''})})
-    : fetch(`${RANK_API}?room=${room}&uid=${uid}`);
-  return req.then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  const payload = entry ? {...entry, room: tgRoom(), uid: tgUid(), init: TG.app.initData || ''} : null;
+  const getUrl = payload ? `${RANK_API}?op=submit&d=${encodeURIComponent(JSON.stringify(payload))}`
+                         : `${RANK_API}?room=${encodeURIComponent(tgRoom())}&uid=${encodeURIComponent(tgUid())}`;
+  if (rankJsonp) return jsonp(getUrl);
+  return (payload ? fetch(RANK_API, {method:'POST', body: JSON.stringify(payload)}) : fetch(getUrl))
+    .then(r => { if (!r.ok){ const e = new Error(String(r.status)); e.http = true; throw e; } return r.json(); })
+    .catch(e => { if (e.http) throw e; rankJsonp = true; return jsonp(getUrl); });
 }
 function submitRank(entry, lineEl){
   if (!rankReady()) return;
@@ -981,7 +995,7 @@ function rankScreen(){
     const mine = res.me && res.me.rank > res.top.length ? `<li class="gap">⋮</li>${row(res.me)}` : '';
     $('#rbody').innerHTML = `<ol class="rank">${res.top.map(row).join('')}${mine}</ol>`;
     const meRow = $('#rbody .mine'); if (meRow && meRow.scrollIntoView) meRow.scrollIntoView({block:'nearest'});
-  }).catch(e => { if (my === token) $('#rbody').innerHTML = note(`랭킹을 불러오지 못했어요.<br>잠시 후 다시 열어 주세요.<br><small>(${esc(/^\d+$/.test(e && e.message) ? '서버 응답 ' + e.message : '서버 연결 실패')})</small>`); });
+  }).catch(e => { if (my === token) $('#rbody').innerHTML = note(`랭킹을 불러오지 못했어요.<br>잠시 후 다시 열어 주세요.<br><small>(${esc(/^\d+$/.test(e && e.message) ? '서버 응답 ' + e.message : '서버 연결 실패 · ' + ((e && e.message) || ''))})</small>`); });
 }
 
 /* ================= dex ================= */
