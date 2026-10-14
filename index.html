@@ -941,7 +941,9 @@ function endingScreen(idx, ch, name, sc, preview){
 /* ================= room ranking =================
    Scores are grouped by Telegram's chat_instance, which is only known to people who open
    the game from a link inside that group chat, so strangers can never appear on a room's board. */
-const RANK_API = 'https://tubular-raindrop-22f885.netlify.app/api/rank';   // Netlify function in netlify/functions/rank.mjs
+// Netlify function in netlify/functions/rank.mjs. When the game itself is served from Netlify the call is
+// same-origin, which Telegram's in-app browser never blocks; from anywhere else it goes cross-origin.
+const RANK_API = /\.netlify\.app$/.test(location.hostname) ? '/api/rank' : 'https://tubular-raindrop-22f885.netlify.app/api/rank';
 const PENDING = 'hsk_rank_pending';
 const tgRoom = () => (TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.chat_instance) || '';
 const tgUid = () => String((TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.user && TG.app.initDataUnsafe.user.id) || '');
