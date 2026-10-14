@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#18271F">
+<title>학생회 키우기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=IBM+Plex+Sans+KR:wght@400;500;600&family=Nanum+Pen+Script&display=swap">
+<style>
+/* One phone-width column: status bar on top, a photo "stage" in the middle (room background,
+   teacher above, my character below), action buttons at the bottom. Chrome is chalkboard green,
+   cards are paper. Single deliberate look, so every color is set explicitly. */
+:root{
+  --board:#22362D; --board-hi:#2C4539; --board-lo:#18271F; --glass:rgba(20,34,27,.86);
+  --chalk:#F2EFE4; --chalk-dim:#AFBCB0; --chalk-faint:rgba(242,239,228,.14); --chalk-line:rgba(242,239,228,.32);
+  --yellow:#F1CF62; --coral:#E8775F; --wood:#B07D4B; --wood-lo:#7E5530;
+  --paper:#FAF6EA; --ink:#1E2621; --ink-dim:#5B6559; --tie:#2F5B47; --gold:#C99A2E;
+  --floor:#D9B07A; --floor-lo:#C99B62; --wall:#F1E7D6;
+  --f-display:'Jua','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --f-body:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --f-chalk:'Nanum Pen Script','Jua',cursive;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--board-lo);color:var(--chalk);font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+button:focus-visible,input:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+h1,h2,h3,p{margin:0}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;text-wrap:balance}
+
+.app{height:100%;max-width:460px;margin:0 auto;display:flex;flex-direction:column;background:var(--board);border-inline:6px solid var(--wood-lo)}
+@media (max-width:472px){.app{border-inline:0}}
+
+/* status bar */
+.hud{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px 8px;background:var(--board-lo);border-bottom:2px solid var(--wood-lo)}
+.grade-pill{font-family:var(--f-display);font-size:17px;background:var(--wood);color:var(--paper);padding:1px 11px;border-radius:8px;box-shadow:inset 0 -3px 0 var(--wood-lo)}
+.stat{font-size:12.5px;color:var(--chalk-dim);display:flex;align-items:baseline;gap:5px}
+.stat b{font-family:var(--f-display);font-weight:400;font-size:18px;color:var(--chalk);font-variant-numeric:tabular-nums}
+.hud .score{margin-left:auto}
+.chips{flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:2px 9px;border-radius:99px;border:1px solid var(--yellow);color:var(--yellow);background:transparent}
+.chip.empty{border-color:var(--chalk-line);color:var(--chalk-dim)}
+
+/* stage */
+.stage{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--board-lo)}
+.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center bottom;z-index:0}
+.ph{position:absolute;inset:0;z-index:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;padding:0 16% 30%;
+  background:repeating-linear-gradient(135deg,transparent 0 16px,rgba(242,239,228,.04) 16px 32px),linear-gradient(var(--board) 0 62%,var(--floor-lo) 62%)}
+.ph .place{font-family:var(--f-chalk);font-size:32px;line-height:1.1}
+.ph .muted{font-size:12px;color:var(--chalk-dim)}
+.mapwrap{position:absolute;inset:0;z-index:0}
+.shade{position:absolute;inset:0;z-index:1;background:rgba(10,18,14,.6)}
+.me,.npc{position:absolute;z-index:2;width:auto;max-width:none;pointer-events:none;filter:drop-shadow(0 6px 6px rgba(0,0,0,.25))}
+.me.center{left:50%;bottom:0;height:54%;transform:translateX(-50%)}
+.me.corner{left:-3%;bottom:0;height:31%}
+.me.tiny{left:66%;bottom:3%;height:17%}
+.npc.center{left:50%;bottom:0;height:58%;transform:translateX(-50%)}
+.npc.tl{left:0;top:3%;height:42%}
+.npc.top{left:50%;top:3%;height:40%;transform:translateX(-50%)}
+.npc.bl{left:2%;bottom:0;height:46%}
+.npc.br{right:0;bottom:0;height:46%}
+.npc.peek{right:-4%;bottom:0;height:34%}
+.layer{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:10px;padding:12px 16px;pointer-events:none;overflow-y:auto}
+.layer>*{pointer-events:auto}
+.layer .grow{flex:1;pointer-events:none}
+.actions{display:flex;flex-direction:column;gap:8px;padding:10px 16px 14px;background:var(--board-lo);border-top:2px solid var(--wood-lo)}
+.actions:empty{display:none}
+.row{display:flex;gap:8px}.row>*{flex:1}
+
+.btn{border:0;border-radius:14px;padding:13px 16px;font-family:var(--f-display);font-size:19px;background:var(--yellow);color:var(--ink);box-shadow:0 4px 0 #b39232;transition:transform .08s}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #b39232}
+.btn.ghost{background:transparent;color:var(--chalk);border:2px solid var(--chalk-line);box-shadow:none}
+.btn:disabled{opacity:.35;cursor:default}
+.link{background:none;border:0;color:var(--chalk-dim);font-size:13px;text-decoration:underline;text-underline-offset:3px;padding:4px}
+.muted{color:var(--chalk-dim);font-size:13px}
+.center{text-align:center}
+
+.glass{background:var(--glass);border:1px solid var(--chalk-line);border-radius:16px;padding:14px;backdrop-filter:blur(3px)}
+.paper{background:var(--paper);color:var(--ink);border-radius:14px;padding:14px 16px;box-shadow:0 6px 0 rgba(0,0,0,.22)}
+.chalk{font-family:var(--f-chalk);font-size:24px;line-height:1.2}
+.tag{font-size:12px;color:var(--yellow);letter-spacing:.05em}
+
+/* speech bubble */
+.bubble{position:relative;background:var(--paper);color:var(--ink);border-radius:16px;padding:10px 14px 12px;box-shadow:0 5px 0 rgba(0,0,0,.2)}
+.bubble .who{display:block;font-size:11.5px;color:var(--tie);font-weight:600;margin-bottom:2px}
+.bubble .say{font-family:var(--f-chalk);font-size:25px;line-height:1.15}
+.bubble.r{margin-left:42%}
+.bubble.l{margin-right:30%}
+
+/* title */
+.sign{align-self:center;margin-top:6px;background:var(--board);border:8px solid var(--wood);border-radius:10px;box-shadow:inset 0 0 0 2px var(--wood-lo),0 8px 0 rgba(0,0,0,.25);padding:14px 26px 12px;text-align:center}
+.sign .eyebrow{font-size:11.5px;letter-spacing:.14em;color:var(--chalk-dim)}
+.sign h1{font-size:54px;line-height:1;color:var(--chalk);margin-top:4px}
+.sign h1 span{color:var(--yellow)}
+.trio{position:absolute;left:0;right:0;bottom:0;height:46%;z-index:2;pointer-events:none}
+.trio img{position:absolute;bottom:0;height:88%;width:auto;filter:drop-shadow(0 6px 6px rgba(0,0,0,.25))}
+.trio img:nth-child(1){left:50%;transform:translateX(-50%);height:100%;z-index:2}
+.trio img:nth-child(2){left:2%}
+.trio img:nth-child(3){right:2%}
+
+/* select */
+.pick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.card{border:2px solid var(--chalk-line);border-radius:14px;background:rgba(0,0,0,.25);padding:6px 4px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px}
+.card img{width:100%;aspect-ratio:2/3;object-fit:contain}
+.card h3{font-size:19px}
+.card .nums{font-size:11.5px;color:var(--chalk-dim);font-variant-numeric:tabular-nums}
+.card[aria-pressed="true"]{border-color:var(--yellow);background:rgba(241,207,98,.14)}
+.card[aria-pressed="true"] h3{color:var(--yellow)}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12.5px;color:var(--chalk-dim)}
+.field input{font:inherit;font-size:17px;color:var(--ink);background:var(--paper);border:0;border-radius:10px;padding:10px 12px}
+
+/* center map: the real floor plan picture, rooms are tap areas measured on it (percent of a 2:3 box) */
+.mapwrap{container-type:size;background:var(--board-lo)}
+.mapbox{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(100cqw, calc(100cqh * 2 / 3));aspect-ratio:2/3}
+.mapimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:4px}
+.room{position:absolute;border:3px solid transparent;border-radius:8px;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;padding-top:6px;color:var(--chalk)}
+.room .rn{font-family:var(--f-display);font-size:16px;line-height:1.2;background:var(--board);border:2px solid var(--wood);border-radius:7px;padding:1px 9px;box-shadow:0 3px 0 rgba(0,0,0,.3)}
+.room .st{font-size:11px;padding:0 8px;border-radius:99px;background:var(--paper);color:var(--ink)}
+.room.now{border-color:var(--yellow);background:rgba(241,207,98,.14);box-shadow:0 0 0 4px rgba(241,207,98,.45);animation:glow 1.4s ease-in-out infinite}
+.room.now .st{background:var(--yellow)}
+.room.done .st{background:var(--tie);color:var(--paper)}
+.room.locked{background:rgba(16,26,21,.42)}
+.room.deco{cursor:default}
+@keyframes glow{50%{box-shadow:0 0 0 8px rgba(241,207,98,.2)}}
+.r-small{left:3.9%;top:4.6%;width:24.4%;height:25%}
+.r-main{left:36.6%;top:4.6%;width:58.6%;height:36%}
+.r-edu{left:62.5%;top:42%;width:32.7%;height:36%}
+.r-hall{left:27.8%;top:41.7%;width:33.7%;height:38.4%}
+.mapme{position:absolute;left:39%;top:64%;height:14%;pointer-events:none;filter:drop-shadow(0 4px 4px rgba(0,0,0,.35))}
+.help{position:absolute;right:14px;top:12px;z-index:4;width:34px;height:34px;border-radius:50%;border:0;background:var(--board);color:var(--chalk);font-family:var(--f-display);font-size:19px;box-shadow:0 3px 0 rgba(0,0,0,.3)}
+
+/* rps */
+.hands{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-left:24%}
+.hand{border:2px solid var(--chalk-line);border-radius:14px;background:var(--glass);padding:6px;display:flex;flex-direction:column;align-items:center;font-family:var(--f-display);font-size:15px}
+.hand img{width:82%;aspect-ratio:1}
+.duel{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;text-align:center}
+.duel img{width:100%;max-width:110px;aspect-ratio:1;margin:0 auto}
+.duel .vs{font-family:var(--f-display);font-size:20px;color:var(--chalk-dim)}
+.duel .lbl{font-size:12px;color:var(--chalk-dim)}
+.verdict{font-family:var(--f-display);font-size:30px;text-align:center}
+.win{color:var(--yellow)}.lose{color:var(--coral)}
+.pop-in{animation:popin .35s ease-out}
+@keyframes popin{from{transform:scale(.6);opacity:.2}to{transform:none;opacity:1}}
+.skillcard{display:flex;gap:12px;align-items:center}
+.skillcard .no{font-family:var(--f-display);font-size:40px;line-height:1;color:var(--tie);font-variant-numeric:tabular-nums}
+.skillcard .nm{font-family:var(--f-display);font-size:21px;line-height:1.15}
+.skillcard .eff{font-size:13px;color:var(--ink-dim)}
+
+/* education room */
+.count{display:flex;gap:6px;margin:6px 0 10px}
+.count i{flex:1;height:7px;border-radius:4px;background:var(--chalk-faint)}
+.count i.used{background:var(--yellow)}
+.choice{display:flex;align-items:center;gap:12px;text-align:left;border:2px solid var(--chalk-line);border-radius:14px;background:rgba(0,0,0,.2);padding:11px 12px;width:100%}
+.choice+.choice{margin-top:8px}
+.choice .ico{width:42px;height:42px;flex:none;border-radius:10px;background:var(--chalk-faint);display:grid;place-items:center;font-family:var(--f-display);font-size:22px}
+.choice .ico svg{width:24px;height:24px}
+.choice h3{font-size:19px}
+.choice p{font-size:12px;color:var(--chalk-dim)}
+.choice .gain{margin-left:auto;font-family:var(--f-display);font-size:16px;color:var(--yellow);white-space:nowrap}
+.choice:disabled{opacity:.35}
+
+/* arrow game */
+.gh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.gh h2{font-size:21px}
+.dots{display:flex;gap:5px}
+.dots i{width:13px;height:13px;border-radius:50%;border:2px solid var(--chalk-line)}
+.dots i.ok{background:var(--yellow);border-color:var(--yellow)}
+.dots i.no{background:var(--coral);border-color:var(--coral)}
+.timer{height:9px;border-radius:5px;background:var(--chalk-faint);overflow:hidden;margin-top:8px}
+.timer i{display:block;height:100%;width:100%;background:var(--yellow);transform-origin:left;will-change:transform}
+.timer.low i{background:var(--coral)}
+.seq{display:flex;justify-content:center;gap:7px;margin-top:10px}
+.tile{width:48px;height:48px;border-radius:11px;border:2px solid var(--chalk-line);display:grid;place-items:center;color:var(--chalk);background:rgba(0,0,0,.15)}
+.tile.now{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(241,207,98,.3)}
+.tile.done{background:var(--yellow);border-color:var(--yellow);color:var(--ink)}
+.tile.bad{background:var(--coral);border-color:var(--coral);color:var(--ink)}
+.tile svg,.pad svg{width:26px;height:26px}
+.msg{min-height:32px;text-align:center;font-family:var(--f-display);font-size:22px;margin-top:6px}
+.pad{align-self:flex-end;display:grid;grid-template-columns:repeat(3,66px);grid-template-rows:repeat(3,62px);gap:7px}
+.pad button{border:0;border-radius:14px;background:var(--chalk);color:var(--ink);display:grid;place-items:center;box-shadow:0 4px 0 #b7b3a5}
+.pad button:active{transform:translateY(3px);box-shadow:0 1px 0 #b7b3a5}
+.pad .u{grid-area:1/2}.pad .l{grid-area:2/1}.pad .r{grid-area:2/3}.pad .d{grid-area:3/2}
+.shake{animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* quiz */
+.qcard{font-size:16px;line-height:1.45;font-weight:500}
+.qcard .topic{display:block;font-size:11.5px;font-weight:400;color:var(--ink-dim);margin-bottom:2px}
+.opts{display:flex;flex-direction:column;gap:7px}
+.opt{text-align:left;border:2px solid var(--chalk-line);border-radius:12px;background:var(--glass);padding:10px 12px;font-size:15px;display:flex;gap:10px;align-items:flex-start}
+.opt .k{font-family:var(--f-display);color:var(--chalk-dim);flex:none;width:1.1em}
+.opt.right{background:var(--yellow);border-color:var(--yellow);color:var(--ink)}
+.opt.wrong{background:var(--coral);border-color:var(--coral);color:var(--ink)}
+.opt.right .k,.opt.wrong .k{color:var(--ink)}
+.opt.gone{opacity:.3;text-decoration:line-through}
+
+/* report card */
+.sheet h2{font-size:22px;text-align:center}
+.sheet .sub{text-align:center;font-size:12px;color:var(--ink-dim)}
+.sheet table{width:100%;border-collapse:collapse;margin-top:8px;font-variant-numeric:tabular-nums}
+.sheet td{padding:6px 2px;border-bottom:1px solid #e3dccb;font-size:14px}
+.sheet td:last-child{text-align:right;font-family:var(--f-display);font-size:17px}
+.sheet tr.total td{border-bottom:0;border-top:2px solid var(--ink);font-weight:600}
+.sheet tr.total td:last-child{font-size:22px;color:var(--tie)}
+.sheet .note{font-size:12px;color:var(--ink-dim);margin-top:6px}
+
+/* mom event */
+.answers{display:flex;flex-direction:column;gap:7px}
+.answer{text-align:left;border:2px solid var(--chalk-line);border-radius:12px;background:var(--glass);padding:10px 12px;font-size:14.5px}
+
+/* ending */
+.diploma{display:flex;gap:12px;align-items:flex-start;border:3px double var(--tie)}
+.diploma.s{border-color:var(--gold)}
+.stamp{flex:none;width:58px;height:58px;border-radius:50%;border:3px solid var(--coral);color:var(--coral);display:grid;place-items:center;font-family:var(--f-display);font-size:34px;transform:rotate(-8deg)}
+.diploma.s .stamp{border-color:var(--gold);color:var(--gold)}
+.diploma .eb{font-size:11.5px;color:var(--ink-dim);letter-spacing:.06em}
+.diploma h2{font-size:23px;line-height:1.15}
+.diploma .scene{font-family:var(--f-chalk);font-size:21px;line-height:1.15;margin-top:4px}
+.diploma .line{font-size:14px;font-weight:500;margin-top:4px}
+.diploma .score{display:flex;gap:12px;margin-top:6px;font-size:12px;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.diploma .score b{font-family:var(--f-display);font-weight:400;font-size:16px;color:var(--ink)}
+
+/* dex */
+.dex{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.slot{border:2px solid var(--chalk-line);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:2px;background:var(--glass)}
+.slot.seen{border-color:var(--yellow)}
+.slot .lt{font-family:var(--f-display);font-size:26px;line-height:1;color:var(--chalk-dim)}
+.slot.seen .lt{color:var(--yellow)}
+.slot h3{font-size:16px;line-height:1.2}
+.slot .range{font-size:11.5px;color:var(--chalk-dim);font-variant-numeric:tabular-nums}
+.marks{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.marks span{font-size:10.5px;padding:0 6px;border-radius:99px;border:1px solid var(--chalk-line);color:var(--chalk-dim)}
+.marks span.on{background:var(--yellow);border-color:var(--yellow);color:var(--ink)}
+.picker{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.picker button{border:2px solid var(--chalk-line);border-radius:10px;background:transparent;padding:8px 4px;font-family:var(--f-display);font-size:15px}
+.picker button[aria-pressed="true"]{border-color:var(--yellow);color:var(--yellow)}
+
+.snd{width:30px;height:30px;border-radius:50%;border:1px solid var(--chalk-line);background:transparent;display:grid;place-items:center;color:var(--chalk);padding:0}
+.snd svg{width:16px;height:16px}
+/* skill popover */
+.pop{position:absolute;left:16px;right:16px;top:10px;z-index:6}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="app">
+  <header class="hud" id="hud" hidden></header>
+  <main class="stage" id="stage">
+    <img class="bg" id="bg" alt="" hidden>
+    <div class="ph" id="ph" hidden></div>
+    <div class="mapwrap" id="map" hidden></div>
+    <div class="shade" id="shade" hidden></div>
+    <img class="me" id="me" alt="" hidden>
+    <img class="npc" id="npc" alt="" hidden>
+    <div class="layer" id="layer" aria-live="polite"></div>
+    <div class="pop" id="pop" hidden></div>
+  </main>
+  <footer class="actions" id="actions"></footer>
+</div>
+
+<script>
+/* ================= data ================= */
+const IMG = {};
+['str','int','bal','str_panic','int_panic','bal_panic','str_adult','int_adult','bal_adult','teacher','teacher_praise','teacher_cheer','mom',
+ 'rock','scissors','paper','bg_title','room_main','room_edu','room_small','map','scene_g2','scene_g3','scene_g6','end_F','end_D','end_C','end_B','end_A','end_S'
+].forEach(k => IMG[k] = 'img/' + k + '.webp');
+
+/* Rooms: set bg to an IMG key once the room photo arrives. */
+const ROOMS = {
+  small:{game:'복음방', sub:'스킬 얻기', real:'스몰룸', bg:'room_small'},
+  edu:{game:'사명자 양성교육', sub:'미니게임', real:'교육실', bg:'room_edu'},
+  main:{game:'학년 승급전', sub:'메인퀘스트', real:'메인룸', bg:'room_main'}
+};
+const ORDER = {rps:'small', practice:'edu', mq:'main'};
+
+const CHARS = {
+  str:{name:'힘캐', s:5, i:1, hint:'화살표에 강함'},
+  int:{name:'지능캐', s:1, i:5, hint:'퀴즈에 강함'},
+  bal:{name:'균형캐', s:3, i:3, hint:'고르게 무난함'}
+};
+const GRADES = [
+  {label:'중1', diff:'하', arrow:2.2, quiz:11.2, stage:'처음 온 날', event:'첫 예배', scene:{room:'main'}, text:'낯선 학생센터에 혼자 들어온 신입. 다들 아는 사이 같아서 자리 하나 앉기도 진땀'},
+  {label:'중2', diff:'하', arrow:2.0, quiz:10.2, stage:'사춘기', event:'야외예배', scene:{bg:'scene_g2'}, text:'다 귀찮은 중2. 야외예배 단체사진에서 혼자 딴 데를 보고 있음'},
+  {label:'중3', diff:'중', arrow:1.8, quiz:9.2, stage:'중등 최고참', event:'여름수련회', scene:{bg:'scene_g3'}, text:'후배들을 챙기는 조장인데, 수련회 첫날 아침 기상 알람에 혼자만 못 일어남'},
+  {label:'고1', diff:'중', arrow:1.6, quiz:8.2, stage:'다시 막내', event:'월례회 첫 발표', scene:{room:'main'}, text:'고등부에선 다시 막내. 월례회 단상에 처음 섰는데 마이크가 안 켜짐'},
+  {label:'고2', diff:'상', arrow:1.4, quiz:7.2, stage:'사명자', event:'구역장 첫 모임', scene:{room:'small'}, text:'구역장을 맡아 첫 모임을 이끌어야 하는데, 온 사람이 나 혼자'},
+  {label:'고3', diff:'상', arrow:1.2, quiz:6.2, stage:'졸업 준비', event:'지파 체육대회', scene:{bg:'scene_g6'}, text:'학생회 마지막 체육대회. 계주 마지막 주자로 섰는데 출발 신호와 동시에 신발이 벗겨짐'}
+];
+const SKILLS = {
+  1:{name:'여유 만만', eff:'화살표 제한시간 1.3배'},
+  2:{name:'차분한 생각', eff:'퀴즈 제한시간 1.3배'},
+  3:{name:'한 번만 봐주세요', eff:'승급전마다 화살표 실패 1번을 30% 확률로 성공 처리'},
+  4:{name:'다시 한번 기회', eff:'승급전마다 퀴즈 오답 1번을 30% 확률로 재도전'},
+  5:{name:'체육대회 체력', eff:'힘 +2'},
+  6:{name:'말씀 암송', eff:'지능 +2'},
+  7:{name:'문무겸비', eff:'힘·지능 모두 +2 (희귀)', w:.5},
+  8:{name:'교사 추천서', eff:'최종 엔딩 점수 +100'},
+  9:{name:'오답 노트', eff:'승급전 퀴즈 보기 1개 지우기'},
+  10:{name:'지름길', eff:'승급전 화살표 5개 → 4개'}
+};
+const T = '윤하늘 교사님';
+const TUT = [
+  {say:'어? 처음 보는 얼굴이네! 여기가 어디냐고? 동탄학생회 학생센터야.'},
+  {say:'나는 윤하늘 교사야. 앞으로 6년 동안 너를 맡게 됐어. 잘 부탁해!'},
+  {say:'규칙은 간단해. 중1부터 고3까지 학년마다 승급전을 치르고, 점수를 모아 졸업하는 거야. 점수가 높을수록 졸업한 뒤 모습이 멋져져.'},
+  {say:'센터 구경시켜 줄게. 방은 세 군데만 기억하면 돼.', map:''},
+  {say:'여기는 복음방. 나랑 가위바위보해서 이기면 스킬을 하나 줄게. 학년마다 한 번!', map:'small'},
+  {say:'여기는 교육실. 사명자 양성교육을 학년마다 3번 받을 수 있어. 다 통과하면 힘이나 지능이 올라.', map:'edu'},
+  {say:'마지막은 메인룸. 학년 승급전을 치르는 곳이야. 화살표 3번, 퀴즈 3문제. 기회는 한 번뿐이니까 준비하고 들어가!', map:'main'}
+];
+const REACT = {
+  praise:['역시! 내가 사람 볼 줄 안다니까.','오~ 이 정도면 사명자 감인데?'],
+  base:['나쁘지 않아. 다음 학년엔 조금만 더!','반은 성공! 연습하면 더 올라갈 거야.'],
+  cheer:['괜찮아, 다음 학년이 있잖아.','처음엔 다 그래. 나도 그랬어!']
+};
+const MOM = {
+  ask:'너도 이제 고등학생인데 공부해야 하지 않아?',
+  answers:[
+    {t:'당연히 학교 공부도, 신앙도 잘해야지. 걱정 마, 둘 다 열심히 할게', s:2, i:2},
+    {t:'학교 공부가 중요해? 교회에서만 열심히 하면 돼', s:0, i:1},
+    {t:'그래, 교회는 되도록 그만 가고 학교 공부에 집중할게', s:0, i:-1},
+    {t:'귀찮아, 그냥 집에 있을래', s:-2, i:-2}
+  ]
+};
+const ENDINGS = [
+  {g:'F', name:'한 번 더 학생회', range:'200점 이하', bg:'end_F', scene:'졸업식 날, 청년회 명단 대신 학생회 명단에 이름이 남아 있음. 윤하늘 교사님: "1년 더 같이 있자!"',
+   line:{str:'체육대회를 한 번 더 뛸 수 있어서 오히려 신남', int:'고3 승급전 문제를 전부 외우고 내년을 노림', bal:'후배들이 "선배 아직 여기 계세요?"라고 물음'}},
+  {g:'D', name:'출석만 하는 청년', range:'201~300점', bg:'end_D', scene:'청년회에 올라갔지만 예배가 끝나면 바로 집으로',
+   line:{str:'예배 끝나자마자 의자만 정리하고 사라짐', int:'설교 노트는 꼼꼼한데 아무도 그 존재를 모름', bal:'출석률 100%, 존재감 50%'}},
+  {g:'C', name:'든든한 청년회 활동자', range:'301~400점', bg:'end_C', scene:'청년회 행사마다 이름이 올라가는 활동자',
+   line:{str:'청년회 체육대회 에이스로 스카우트됨', int:'청년회 행사 진행표는 전부 이 사람 손에서 나옴', bal:'어느 부서든 일손이 모자라면 제일 먼저 불려 감'}},
+  {g:'B', name:'믿음직한 구역장', range:'401~500점', bg:'end_B', scene:'구역원 출석을 챙기고 구역 단톡방을 이끄는 구역장',
+   line:{str:'구역 모임 날이면 구역원을 직접 데리러 감', int:'구역 출석부를 엑셀로 자동화함', bal:'고민 상담부터 생일 챙기기까지 빈틈없음'}},
+  {g:'A', name:'멋진 강사', range:'501~699점', bg:'end_A', scene:'단상에서 멋지게 강의하는 강사가 됨',
+   line:{str:'목소리가 커서 마이크가 필요 없는 강의', int:'판서 한 장에 말씀이 다 정리되는 전설의 강의', bal:'강의가 끝나면 질문하려는 줄이 길게 늘어섬'}},
+  {g:'S', name:'학생회로 돌아온 교사', range:'700점', bg:'end_S', scene:'몇 년 뒤, 윤하늘 교사님 옆에 교사로 서서 신입 학생을 맞이함',
+   line:{str:'"{이름} 교사님 체육대회는 학생보다 교사님이 더 뜀"', int:'"{이름} 교사님 구역은 승급전 합격률 100%"', bal:'"학생들이 제일 먼저 찾는 {이름} 교사님"'}}
+];
+/* [question, answer, [wrong×3], topic, long(1.3배)] */
+const Q = {
+ '하':[
+  ['성경을 기준으로 일주일에 몇 번 예배를 드려야 하는가?','2번',['1번','3번','7번'],'교회생활'],
+  ['주일예배는 몇 시 예배인가?','정오 12시',['오전 10시','오전 11시','오후 2시'],'교회생활'],
+  ['학생 수요예배는 몇 시 예배인가?','저녁 6시',['저녁 7시','저녁 7시 30분','오후 4시'],'교회생활'],
+  ['상의 예배 복장은 무슨 색 옷을 입어야 하는가?','흰색',['검정색','하늘색','자유'],'교회생활'],
+  ['학생센터는 몇 층에 있나?','10층',['7층','8층','12층'],'교회생활'],
+  ['방주를 만든 사람은?','노아',['아브라함','모세','다윗'],'성경'],
+  ['골리앗을 물리친 소년은?','다윗',['사울','요나단','삼손'],'성경'],
+  ['이스라엘 백성을 이끌고 애굽을 떠나 홍해를 건넌 지도자는?','모세',['여호수아','아론','갈렙'],'성경'],
+  ['큰 물고기 뱃속에서 3일을 지낸 선지자는?','요나',['엘리야','다니엘','예레미야'],'성경'],
+  ['열두 제자 중 예수님을 판 사람은?','가룟 유다',['베드로','도마','요한'],'성경'],
+  ['대한민국의 수도는?','서울',['부산','인천','세종'],'일반 상식'],
+  ['1기압에서 물이 끓는 온도는?','100℃',['0℃','50℃','120℃'],'일반 상식'],
+  ['윤년이 아닌 해의 1년은 며칠인가?','365일',['360일','364일','366일'],'일반 상식'],
+  ['태양계에서 가장 큰 행성은?','목성',['토성','지구','화성'],'일반 상식'],
+  ['훈민정음을 만든 왕은?','세종대왕',['태조','영조','정조'],'일반 상식'],
+  ['무지개는 보통 몇 가지 색으로 나타내는가?','7가지',['5가지','6가지','8가지'],'일반 상식'],
+  ['대한민국의 국화는?','무궁화',['진달래','개나리','장미'],'일반 상식'],
+  ['올림픽 오륜기의 원은 몇 개인가?','5개',['4개','6개','7개'],'일반 상식'],
+  ['삼각형 세 내각의 합은?','180°',['90°','270°','360°'],'일반 상식'],
+  ['지구가 태양 주위를 한 바퀴 도는 데 걸리는 시간은?','약 1년',['하루','한 달','10년'],'일반 상식']
+ ],
+ '중':[
+  ['하의 예배 복장으로 적절한 것은?','검정 바지',['청바지','반바지','짧은 치마'],'교회생활'],
+  ['성전에 도착하면 먼저 해야 할 것은?','성전에서 기도하기',['쇼파에서 쉬기','핸드폰 하기','친구와 잡담하기'],'교회생활'],
+  ['예배에 못 나올 경우 하면 안 되는 행동은?','"엄마가 교사님한테 얘기해줘"',['교사님께 사정을 최소 하루 전 이야기하기','대체예배 일정 잡기','예배 환경 조정을 시도하기'],'교회생활',1],
+  ['예배 때 챙겨야 할 준비물 중 아닌 것은?','이어폰',['성경책','필기구','헌금'],'교회생활'],
+  ['기도할 때 취해야 할 자세는?','무릎자세',['책상다리','아다리','무릎다리'],'교회생활'],
+  ['사자굴에 던져졌지만 살아 나온 사람은?','다니엘',['요셉','에스더','엘리사'],'성경'],
+  ['형들에게 팔려 가 애굽의 총리가 된 사람은?','요셉',['야곱','베냐민','르우벤'],'성경'],
+  ['머리털이 힘의 비밀이었던 사사는?','삼손',['기드온','드보라','입다'],'성경'],
+  ['예수님을 세 번 부인한 제자는?','베드로',['야고보','안드레','빌립'],'성경'],
+  ['다메섹으로 가던 길에서 예수님을 만나 변화된 사람은?','바울(사울)',['바나바','스데반','디모데'],'성경'],
+  ['물의 화학식은?','H₂O',['CO₂','O₂','NaCl'],'일반 상식'],
+  ['광합성에 필요하지 않은 것은?','산소',['빛','물','이산화탄소'],'일반 상식'],
+  ['임진왜란이 일어난 해는?','1592년',['1392년','1636년','1910년'],'일반 상식'],
+  ['헌법 제1조 "대한민국은 ___이다"의 빈칸은?','민주공화국',['입헌군주국','연방국가','사회주의국가'],'일반 상식'],
+  ['지구에서 가장 넓은 바다는?','태평양',['대서양','인도양','북극해'],'일반 상식'],
+  ['직각삼각형의 빗변이 c일 때 맞는 식은?','a² + b² = c²',['a + b = c','a² − b² = c²','ab = c²'],'일반 상식'],
+  ['독도가 속한 도는?','경상북도',['강원도','경상남도','전라남도'],'일반 상식'],
+  ['온몸으로 피를 보내는 기관은?','심장',['폐','간','콩팥'],'일반 상식'],
+  ['2026년 현재 세계에서 인구가 가장 많은 나라는?','인도',['중국','미국','인도네시아'],'일반 상식'],
+  ['3·1 운동이 일어난 해는?','1919년',['1910년','1945년','1950년'],'일반 상식']
+ ],
+ '상':[
+  ['예배는 언제부터 시작인가?','준비 찬양',['광고','기도','설교말씀'],'교회생활'],
+  ['예배는 어디까지 예배인가?','분반 모임',['설교말씀','광고','주기도문'],'교회생활'],
+  ['예배에 늦을 경우 하지 말아야 할 행동은?','천천히 느긋하게 들어오기',['미리 교사님(구역장)에게 연락하기','늦어서 죄송하다고 말씀드리기','차주부터는 평소보다 10분 일찍 나오기'],'교회생활',1],
+  ['학생센터 건물 이름은?','상록프라자',['효원 빌딩','효원프라자','상록 빌딩'],'교회생활'],
+  ['다음 중 3대 절기가 아닌 것은?','부활절',['유월절','초막절','수장절'],'교회생활'],
+  ['90세에 이삭을 낳은 아브라함의 아내는?','사라',['리브가','라헬','하갈'],'성경'],
+  ['불 수레와 회오리바람으로 하늘에 올라간 선지자는?','엘리야',['엘리사','에녹','이사야'],'성경'],
+  ['"예수 그리스도의 계시라 이는 하나님이 그에게 주사 반드시 속히 될 일을 그 종들에게 보이시려고 그 천사를 그 종 요한에게 보내어 지시하신 것이라" 이 말씀은 어느 성구인가?','계 1:1',['요 1:1','창 1:1','마 1:1'],'성경',1],
+  ['요한계시록에 더하거나 빼면 저주를 받는다는 성구는?','계 22:18-19',['계 1:1-3','계 22:8, 16','계 10:9-11'],'성경'],
+  ['가룟 유다 대신 제비뽑기로 뽑힌 사도는?','맛디아',['바나바','요셉 바사바','스데반'],'성경'],
+  ['DNA 이중나선 구조를 밝힌 과학자는?','왓슨과 크릭',['다윈','멘델','뉴턴'],'일반 상식'],
+  ['현존하는 세계에서 가장 오래된 금속활자 인쇄본은?','직지심체요절',['팔만대장경','훈민정음 해례본','동국정운'],'일반 상식'],
+  ['국회의원의 임기는?','4년',['3년','5년','6년'],'일반 상식'],
+  ['대한민국 선거에서 투표할 수 있는 나이는?','만 18세',['만 16세','만 19세','만 20세'],'일반 상식'],
+  ['원소기호 Fe가 나타내는 원소는?','철',['불소','납','금'],'일반 상식'],
+  ['뉴턴의 운동 제1법칙은?','관성의 법칙',['가속도의 법칙','작용·반작용의 법칙','만유인력의 법칙'],'일반 상식'],
+  ['조선의 마지막 왕(황제)은?','순종',['고종','철종','영조'],'일반 상식'],
+  ['국제연합(UN) 본부가 있는 도시는?','뉴욕',['제네바','파리','워싱턴 D.C.'],'일반 상식'],
+  ['6·25 전쟁이 시작된 날은?','1950년 6월 25일',['1945년 8월 15일','1948년 8월 15일','1953년 7월 27일'],'일반 상식'],
+  ['인플레이션의 뜻은?','물가가 계속 오르는 현상',['물가가 계속 내리는 현상','실업자가 늘어나는 현상','환율이 내리는 현상'],'일반 상식']
+ ]
+};
+const TOPICS = ['일반 상식','성경','교회생활'];
+
+/* ================= pure rules (checked offline) ================= */
+const RULES = {
+  arrowTime(gi, str, s1){ return (GRADES[gi].arrow + 0.1*str) * (s1 ? 1.3 : 1); },
+  quizTime(gi, int, long, s2){ return (GRADES[gi].quiz + 0.5*int) * (long ? 1.3 : 1) * (s2 ? 1.3 : 1); },
+  arrowCount(owned){ return owned.includes(10) ? 4 : 5; },
+  mainScore(a, q){ return a*15 + q*15 + (a===3 && q===3 ? 10 : 0); },
+  ending(total){ return total >= 700 ? 5 : total <= 200 ? 0 : total <= 300 ? 1 : total <= 400 ? 2 : total <= 500 ? 3 : 4; },
+  reaction(pts){ return pts >= 70 ? 'praise' : pts >= 31 ? 'base' : 'cheer'; },
+  drawSkill(owned, rnd=Math.random){
+    const pool = Object.keys(SKILLS).map(Number).filter(id => !owned.includes(id)); if (!pool.length) return null;
+    const w = pool.map(id => SKILLS[id].w || 1), sum = w.reduce((a,b)=>a+b,0);
+    let r = rnd()*sum; for (let k=0;k<pool.length;k++){ r -= w[k]; if (r < 0) return pool[k]; } return pool[pool.length-1];
+  },
+  rps(me, them){ if (me===them) return 0; return ({rock:'scissors',scissors:'paper',paper:'rock'})[me]===them ? 1 : -1; },
+  /* teacher picks a hand so that one throw ends: win 50%, lose 25%, draw 25% */
+  teacherHand(me, rnd=Math.random){
+    const beats = {rock:'scissors', scissors:'paper', paper:'rock'}, r = rnd();
+    if (r < .5) return beats[me];
+    if (r < .75) return Object.keys(beats).find(k => beats[k] === me);
+    return me;
+  },
+  pickSet(diff, exclude=[], rnd=Math.random){
+    return TOPICS.map(t => {
+      const all = Q[diff].filter(q => q[3]===t), fresh = all.filter(q => !exclude.includes(q[0]));
+      const pool = fresh.length ? fresh : all; return pool[Math.floor(rnd()*pool.length)];
+    });
+  },
+  applyMom(st, ans){ return {str: Math.max(1, st.str + ans.s), int: Math.max(1, st.int + ans.i)}; }
+};
+
+/* ================= storage =================
+   localStorage is the fast synchronous copy. Inside Telegram every key is mirrored to
+   Telegram CloudStorage (per player, per bot), so a save follows the player to another phone. */
+const inTelegram = /tgWebApp/.test(location.hash + location.search);
+const TG = { app:null, cloud:null };
+const store = {
+  get(k,d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} cloudSet(k, v); },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} if (TG.cloud) try{ TG.cloud.removeItem(k, () => {}); }catch(e){} }
+};
+function cloudSet(k, v){
+  if (!TG.cloud) return;
+  let s = JSON.stringify(v);
+  if (s.length > 4000 && v && v.used) s = JSON.stringify({...v, used: v.used.slice(-12)});  // CloudStorage value cap is 4096 chars
+  if (s.length > 4000) return;
+  try{ TG.cloud.setItem(k, s, () => {}); }catch(e){}
+}
+const SAVE='hsk_save_v2', DEX='hsk_dex_v2', BEST='hsk_best_v2', TUTK='hsk_tut_v2', NAME='hsk_name';
+const CLOUD_KEYS = [SAVE, DEX, BEST, TUTK, NAME, 'hsk_sound'];
+const tgName = () => { const u = TG.app && TG.app.initDataUnsafe && TG.app.initDataUnsafe.user; return u && u.first_name ? u.first_name.trim().slice(0,10) : ''; };
+
+/* ================= sound (Web Audio, no files) ================= */
+const SND = {
+  ctx:null, on: store.get('hsk_sound', true),
+  ensure(){
+    if (!this.on) return null;
+    if (!this.ctx){ const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; try{ this.ctx = new AC(); }catch(e){ return null; } }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
+  },
+  tone(freq, dur, o={}){
+    const c = this.ensure(); if (!c) return;
+    const t = c.currentTime + (o.when || 0), osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'triangle'; osc.frequency.setValueAtTime(freq, t);
+    if (o.slide) osc.frequency.exponentialRampToValueAtTime(freq * o.slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.vol || .12, t + .012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g).connect(c.destination); osc.start(t); osc.stop(t + dur + .03);
+  },
+  seq(list, o={}){ list.forEach(([f, d, w]) => this.tone(f, d, {...o, when:w})); },
+  play(n){
+    if (!this.on) return;
+    ({
+      tap:() => this.tone(520, .05, {vol:.05}),
+      key:() => this.tone(880, .06, {type:'square', vol:.04}),
+      ok:() => this.seq([[660,.09,0],[990,.15,.09]]),
+      bad:() => this.tone(240, .32, {type:'sawtooth', vol:.07, slide:.6}),
+      draw:() => this.seq([[500,.1,0],[500,.1,.14]]),
+      lose:() => this.seq([[523,.12,0],[440,.12,.12],[349,.26,.24]]),
+      skill:() => this.seq([[523,.08,0],[659,.08,.08],[784,.08,.16],[1047,.24,.24]], {vol:.13}),
+      up:() => this.seq([[587,.1,0],[880,.2,.1]]),
+      fanfare:() => this.seq([[523,.1,0],[659,.1,.1],[784,.1,.2],[1047,.32,.3]], {vol:.13}),
+      soft:() => this.seq([[440,.16,0],[523,.28,.16]], {type:'sine', vol:.1})
+    })[n]?.();
+  },
+  ending(g){
+    if (!this.on) return;
+    const N = m => 440 * Math.pow(2, (m - 69) / 12), q = .3;
+    const mel = {
+      F:[[67,.38],[66,.38],[65,.38],[64,1.1]],
+      D:[[72,q],[74,q],[76,q],[74,q],[72,q*2]],
+      C:[[67,q],[72,q],[76,q],[79,q*2],[76,q],[79,q*3]],
+      B:[[67,q],[72,q],[76,q],[79,q],[84,q*2],[79,q],[84,q*3]],
+      A:[[72,q],[76,q],[79,q],[84,q],[79,q],[84,q],[88,q*3]],
+      S:[[72,.17],[72,.17],[72,.17],[79,.7],[76,.24],[79,.24],[84,1.3]]
+    }[g];
+    let t = .05;
+    mel.forEach(([m, d]) => { this.tone(N(m), d * .95, {type: g === 'F' ? 'sawtooth' : 'triangle', vol: g === 'F' ? .08 : .14, when:t, slide: g === 'F' && d > .5 ? .94 : 0}); t += d; });
+    if (g !== 'F'){
+      this.tone(N(48), t, {type:'sine', vol:.07, when:.05}); this.tone(N(55), t, {type:'sine', vol:.05, when:.05});
+      if (g === 'S' || g === 'A') [72,76,79].forEach(m => this.tone(N(m), 1.4, {type:'sine', vol:.06, when:t - 1.2}));
+    }
+  },
+  toggle(){
+    this.on = !this.on; store.set('hsk_sound', this.on);
+    if (this.ctx){ this.on ? this.ctx.resume() : this.ctx.suspend(); }
+    if (this.on) this.play('ok');
+  }
+};
+const sndIcon = () => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/>${SND.on
+  ? '<path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>'
+  : '<path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'}</svg>`;
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (b && !b.disabled && !b.closest('.pad') && b.id !== 'snd' && b.id !== 'sndt') SND.play('tap'); }, true);
+
+/* ================= stage helpers ================= */
+const $ = s => document.querySelector(s);
+const mapEl=$('#map'), hud=$('#hud'), layer=$('#layer'), actions=$('#actions'), bgEl=$('#bg'), phEl=$('#ph'), shadeEl=$('#shade'), meEl=$('#me'), npcEl=$('#npc'), popEl=$('#pop');
+const shuffle = a => { a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+const sec = t => (Math.round(t*100)/100).toString() + '초';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pick2 = a => a[Math.floor(Math.random()*a.length)];
+const arrowSvg = d => `<svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(${({up:0,right:90,down:180,left:270})[d]}deg)"><path d="M12 3 4 12h5v9h6v-9h5z" fill="currentColor"/></svg>`;
+let S = null, token = 0, rafId = 0, keyHandler = null;
+document.addEventListener('keydown', e => keyHandler && keyHandler(e));
+
+function roomStage(key){ const r = ROOMS[key]; return r.bg ? {bg:r.bg} : {ph:r.real}; }
+function setStage(o){
+  bgEl.hidden = !o.bg; if (o.bg) bgEl.src = IMG[o.bg];
+  phEl.hidden = !o.ph; if (o.ph) phEl.innerHTML = `<span class="place">${o.ph}</span><span class="muted">사진을 받으면 이 자리에 실제 장소 배경이 들어가요</span>`;
+  shadeEl.hidden = !o.shade;
+  mapEl.hidden = !o.map; mapEl.innerHTML = o.map || '';
+  meEl.hidden = !o.me; if (o.me){ meEl.src = IMG[o.me]; meEl.className = 'me ' + (o.meMode || 'corner'); }
+  npcEl.hidden = !o.npc; if (o.npc){ npcEl.src = IMG[o.npc]; npcEl.className = 'npc ' + (o.npcMode || 'top'); }
+}
+function screen(stage, html, acts='', withHud=true){
+  token++; cancelAnimationFrame(rafId); keyHandler = null; popEl.hidden = true;
+  setStage(stage || {}); layer.innerHTML = html; layer.scrollTop = 0; actions.innerHTML = acts;
+  hud.hidden = !(withHud && S); if (!hud.hidden) drawHud();
+}
+function on(id, fn){ const el = document.getElementById(id); if (el) el.addEventListener('click', fn); }
+function persist(){ if (S){ S.t = Date.now(); store.set(SAVE, S); } }
+const pose = k => S.char + (k ? '_' + k : '');
+const bubble = (say, side='', who=T) => `<div class="bubble ${side}"><span class="who">${who}</span><span class="say">${say}</span></div>`;
+
+function drawHud(){
+  const g = S.gi < 6 ? GRADES[S.gi].label : '졸업';
+  const total = S.scores.reduce((a,b)=>a+b,0);
+  const chips = S.owned.length ? S.owned.map(id => `<button class="chip" data-sk="${id}">${SKILLS[id].name}</button>`).join('') : '<span class="chip empty">아직 얻은 스킬이 없어요</span>';
+  hud.innerHTML = `<span class="grade-pill">${g}</span>
+    <span class="stat">힘 <b>${S.str}</b></span><span class="stat">지능 <b>${S.int}</b></span>
+    <span class="stat score">점수 <b>${total}</b></span><button class="snd" id="snd" aria-label="${SND.on ? '소리 끄기' : '소리 켜기'}">${sndIcon()}</button><div class="chips">${chips}</div>`;
+  hud.querySelector('#snd').addEventListener('click', () => { SND.toggle(); drawHud(); });
+  hud.querySelectorAll('[data-sk]').forEach(b => b.addEventListener('click', () => {
+    const id = +b.dataset.sk;
+    popEl.innerHTML = `<div class="paper skillcard pop-in"><span class="no">${String(id).padStart(2,'0')}</span><div><div class="nm">${SKILLS[id].name}</div><div class="eff">${SKILLS[id].eff}</div></div></div>`;
+    popEl.hidden = false;
+  }));
+}
+popEl.addEventListener('click', () => popEl.hidden = true);
+
+/* ================= title / select ================= */
+function title(){
+  S = null;
+  const saved = store.get(SAVE, null);
+  screen({bg:'bg_title'}, `
+    <div class="sign"><p class="eyebrow">동탄학생회 · 시험판 2판</p><h1>학생회<br><span>키우기</span></h1></div>
+    <div class="trio"><img src="${IMG.str}" alt=""><img src="${IMG.int}" alt=""><img src="${IMG.bal}" alt=""></div>`,
+    `<button class="btn" id="new">새로 시작</button>
+     <div class="row"><button class="btn ghost" id="cont" ${saved?'':'disabled'}>${saved && saved.gi < 6 ? '이어하기 · ' + GRADES[saved.gi].label : '이어하기'}</button><button class="btn ghost" id="dex">엔딩 도감</button></div>
+     <div class="row" style="justify-content:center"><button class="link" id="sndt" style="flex:none">소리 ${SND.on ? '켜짐' : '꺼짐'}</button>${inTelegram ? '' : '<button class="link" id="prev" style="flex:none">시험용 · 엔딩 화면 미리보기</button>'}</div>`, false);
+  on('new', select); on('dex', dex); on('prev', previewPicker);
+  on('sndt', () => { SND.toggle(); $('#sndt').textContent = '소리 ' + (SND.on ? '켜짐' : '꺼짐'); });
+  on('cont', () => { S = store.get(SAVE, null); if (S) route(); });
+}
+function select(){
+  let k0 = 'str';
+  screen({bg:'bg_title', shade:true}, `
+    <div><h2 style="font-size:26px">캐릭터를 골라요</h2><p class="muted">힘은 화살표 시간, 지능은 퀴즈 시간을 늘려 줘요.</p></div>
+    <div class="pick">${Object.entries(CHARS).map(([k,c]) => `
+      <button class="card" data-k="${k}" aria-pressed="${k===k0}"><img src="${IMG[k]}" alt=""><h3>${c.name}</h3>
+      <span class="nums">힘 ${c.s} · 지능 ${c.i}</span><span class="nums">${c.hint}</span></button>`).join('')}</div>
+    <div class="field glass"><label for="nm">엔딩에 나올 이름</label><input id="nm" maxlength="10" placeholder="이름" value="${esc(store.get(NAME,'') || tgName())}"></div>`,
+    `<button class="btn" id="go">입학하기</button><button class="link" id="back">처음으로</button>`, false);
+  layer.querySelectorAll('.card').forEach(b => b.addEventListener('click', () => {
+    k0 = b.dataset.k; layer.querySelectorAll('.card').forEach(x => x.setAttribute('aria-pressed', x===b));
+  }));
+  on('back', title);
+  on('go', () => {
+    const name = ($('#nm').value || '').trim() || '학생'; store.set(NAME, name);
+    const c = CHARS[k0];
+    S = {v:2, name, char:k0, str:c.s, int:c.i, gi:0, phase:'intro', practiceLeft:3, owned:[], scores:[], used:[]};
+    persist();
+    if (store.get(TUTK, false)) greet(); else tutorial(0, () => { store.set(TUTK, true); route(); });
+  });
+}
+function greet(){
+  screen({bg:'bg_title', npc:'teacher', npcMode:'center'}, bubble('또 왔네? 이번엔 더 멋지게 졸업해 보자!'), `<button class="btn" id="go">시작하기</button>`);
+  on('go', route);
+}
+
+/* ================= tutorial ================= */
+function tutorial(i, done){
+  const s = TUT[i], last = i === TUT.length - 1;
+  if (s.map === undefined){
+    screen({bg:'bg_title', npc:'teacher', npcMode:'center'}, bubble(s.say),
+      `<button class="btn" id="nx">다음</button><button class="link" id="sk">안내 건너뛰기</button>`);
+  } else {
+    screen({npc:'teacher', npcMode:'peek', map:mapHtml(s.map, null)}, `<div class="grow"></div>` + bubble(s.say, 'l'),
+      `<button class="btn" id="nx">${last ? '센터 둘러보기 끝!' : '다음'}</button><button class="link" id="sk">안내 건너뛰기</button>`);
+  }
+  on('nx', () => last ? done() : tutorial(i+1, done));
+  on('sk', done);
+}
+
+/* ================= center map ================= */
+function roomState(key){
+  if (!S) return '';
+  const order = ['small','edu','main'], cur = ORDER[S.phase], ci = order.indexOf(cur), ki = order.indexOf(key);
+  if (ci < 0) return 'locked';
+  return ki < ci ? 'done' : ki === ci ? 'now' : 'locked';
+}
+function mapHtml(highlight, states){
+  const st = k => states ? roomState(k) : (highlight === k ? 'now' : '');
+  const label = x => x === 'now' ? (states ? '지금 갈 곳' : '여기!') : x === 'done' ? '완료' : x === 'locked' ? '잠김' : '';
+  const room = k => { const x = st(k);
+    return `<button class="room r-${k} ${x}" data-room="${k}" aria-label="${ROOMS[k].real}${label(x) ? ' · ' + label(x) : ''}">
+      <span class="rn">${ROOMS[k].real}</span>${label(x) ? `<span class="st">${label(x)}</span>` : ''}</button>`; };
+  return `<div class="mapbox"><img class="mapimg" src="${IMG.map}" alt="학생센터 배치도">
+    ${room('main')}${room('edu')}${room('small')}<span class="room r-hall deco"><span class="rn">거실</span></span>
+    ${S ? `<img class="mapme" src="${IMG[pose()]}" alt="">` : ''}</div>`;
+}
+function centerMap(){
+  const cur = ORDER[S.phase];
+  screen({map:mapHtml(null, true)}, `<button class="help" id="help" aria-label="안내 다시 보기">?</button>`,
+    `<button class="btn" id="go">${ROOMS[cur].real} 들어가기 · ${ROOMS[cur].game}</button>`);
+  mapEl.querySelectorAll('[data-room]').forEach(b => b.addEventListener('click', () => { if (b.dataset.room === cur) enter(cur); }));
+  on('go', () => enter(cur));
+  on('help', () => tutorial(0, centerMap));
+}
+function enter(k){ ({small:bokeum, edu:eduHub, main:mainStart})[k](); }
+
+function route(){
+  persist();
+  if (S.phase === 'intro') return intro();
+  if (S.phase === 'mom') return momEvent();
+  if (S.phase === 'done') return ending();
+  centerMap();
+}
+
+/* ================= grade intro ================= */
+function intro(){
+  const g = GRADES[S.gi], sc = g.scene.bg ? {bg:g.scene.bg} : roomStage(g.scene.room);
+  screen({...sc, me:pose('panic'), meMode:'center'}, `
+    <div class="glass"><span class="tag">${g.label} · ${g.stage} · ${g.event}</span><p class="chalk">${g.text}</p></div>`,
+    `<button class="btn" id="go">학생센터로 가기</button>`);
+  on('go', () => { S.phase = 'rps'; route(); });
+}
+
+/* ================= 복음방 (rps) ================= */
+const HANDS = [['rock','바위'],['scissors','가위'],['paper','보']];
+const hl = k => HANDS.find(h => h[0]===k)[1];
+function bokeum(say){
+  screen({...roomStage('small'), npc:'teacher', npcMode:'tl', me:pose(), meMode:'corner'}, `
+    ${bubble(say || '스킬 받고 싶어?<br>가위바위보 한 판!', 'r')}
+    <div class="grow"></div>
+    <p class="muted center" style="margin-left:24%">이기면 스킬 1개 · 비기면 다시 · 지면 이번 학년은 스킬 없음</p>
+    <div class="hands">${HANDS.map(([k,l]) => `<button class="hand" data-k="${k}"><img src="${IMG[k]}" alt="">${l}</button>`).join('')}</div>
+    <div style="height:24%;flex:none"></div>`, '');
+  layer.querySelectorAll('.hand').forEach(b => b.addEventListener('click', () => throwHand(b.dataset.k)));
+}
+function throwHand(me){
+  const them = RULES.teacherHand(me), r = RULES.rps(me, them);
+  const duel = `<div class="glass duel"><div><img class="pop-in" src="${IMG[them]}" alt="${hl(them)}"><div class="lbl">교사님 · ${hl(them)}</div></div>
+    <span class="vs">vs</span><div><img class="pop-in" src="${IMG[me]}" alt="${hl(me)}"><div class="lbl">나 · ${hl(me)}</div></div></div>`;
+  if (r === 0){
+    SND.play('draw');
+    screen({...roomStage('small'), npc:'teacher', npcMode:'tl', me:pose(), meMode:'corner'},
+      `${bubble('비겼네? 한 번 더!', 'r')}<div class="grow"></div>${duel}<p class="verdict">비겼다!</p><div style="height:24%;flex:none"></div>`,
+      `<button class="btn" id="again">다시 내기</button>`);
+    on('again', () => bokeum('비겼으니까<br>한 번 더!'));
+    return;
+  }
+  let id = null;
+  if (r > 0){
+    id = RULES.drawSkill(S.owned);
+    if (id){ S.owned.push(id); if (id===5) S.str += 2; if (id===6) S.int += 2; if (id===7){ S.str += 2; S.int += 2; } }
+  }
+  S.phase = 'practice'; S.practiceLeft = 3; persist();
+  SND.play(r > 0 ? (id ? 'skill' : 'ok') : 'lose');
+  const card = id ? `<div class="paper skillcard pop-in"><span class="no">${String(id).padStart(2,'0')}</span><div><div class="nm">${SKILLS[id].name}</div><div class="eff">${SKILLS[id].eff} · 졸업까지 계속</div></div></div>`
+    : (r > 0 ? `<p class="muted center">받을 수 있는 스킬을 모두 모았어요.</p>` : '');
+  screen({...roomStage('small'), npc:'teacher', npcMode:'tl', me:pose(r > 0 ? '' : 'panic'), meMode:'corner'},
+    `${bubble(r > 0 ? '졌다~ 약속대로 스킬 줄게!' : '내가 이겼다!<br>이번 학년은 스킬 없이 가 보자.', 'r')}<div class="grow"></div>
+     ${duel}<p class="verdict ${r>0?'win':'lose'}">${r>0?'이겼다!':'졌다…'}</p>${card}<div style="height:24%;flex:none"></div>`,
+    `<button class="btn" id="next">교육실로 가기</button>`);
+  on('next', route);
+}
+
+/* ================= 사명자 양성교육 (practice) ================= */
+function eduHub(){
+  const g = GRADES[S.gi], used = 3 - S.practiceLeft, left = S.practiceLeft > 0;
+  const at = RULES.arrowTime(S.gi, S.str, false), qt = RULES.quizTime(S.gi, S.int, false, false);
+  screen({...roomStage('edu'), me:pose(), meMode:'corner'}, `
+    <div class="glass">
+      <span class="tag">${g.label} · 교육실</span>
+      <h2 style="font-size:24px">사명자 양성교육</h2>
+      <p class="muted">3번 모두 통과하면 능력치 +1 · 남은 교육 ${S.practiceLeft}번</p>
+      <div class="count">${[0,1,2].map(i => `<i class="${i<used?'used':''}"></i>`).join('')}</div>
+      <button class="choice" id="pa" ${left?'':'disabled'}><span class="ico">${arrowSvg('up')}</span>
+        <span><h3>화살표 연습</h3><p>5개 × 3번 · 한 번에 ${sec(at)}</p></span><span class="gain">힘 +1</span></button>
+      <button class="choice" id="pq" ${left?'':'disabled'}><span class="ico">?</span>
+        <span><h3>퀴즈 연습</h3><p>난이도 ${g.diff} · 일반·성경·교회생활 · ${sec(qt)}</p></span><span class="gain">지능 +1</span></button>
+    </div>`,
+    left ? `<button class="btn ghost" id="mq">교육 건너뛰고 메인룸으로</button>` : `<button class="btn" id="mq">메인룸으로 가기</button>`);
+  on('pa', () => { S.practiceLeft--; persist(); arrowGame({room:'edu', title:'화살표 연습', count:5, time:at, skill3:false, onDone: ok => practiceResult('arrow', ok)}); });
+  on('pq', () => { S.practiceLeft--; persist();
+    quizGame({room:'edu', title:'퀴즈 연습', qs:shuffle(RULES.pickSet(g.diff)), time:q => RULES.quizTime(S.gi, S.int, q[4], false), remove1:false, skill4:false, onDone: ok => practiceResult('quiz', ok)}); });
+  on('mq', () => { S.phase = 'mq'; route(); });
+}
+function practiceResult(kind, ok){
+  const pass = ok === 3; if (pass){ if (kind==='arrow') S.str++; else S.int++; } persist(); SND.play(pass ? 'up' : 'bad');
+  screen({...roomStage('edu'), me:pose(pass ? '' : 'panic'), meMode:'center'}, `
+    <div class="glass center"><p class="verdict ${pass?'win':'lose'}" style="font-size:34px">${pass ? (kind==='arrow'?'힘 +1':'지능 +1') : '아깝다!'}</p>
+    <p class="chalk">${pass ? '3번 모두 통과!' : `3번 중 ${ok}번 통과. 능력치는 그대로예요.`}</p></div>`,
+    `<button class="btn" id="back">계속</button>`);
+  on('back', eduHub);
+}
+
+/* ================= arrow game ================= */
+function arrowGame(o){
+  const results = o.results || [], round = results.length;
+  if (round === 3){ o.onDone(results.filter(Boolean).length); return; }
+  const dirs = ['up','down','left','right'], seq = Array.from({length:o.count}, () => dirs[Math.floor(Math.random()*4)]);
+  screen({...roomStage(o.room), me:pose(), meMode:'corner'}, `
+    <div class="glass">
+      <div class="gh"><h2>${o.title}</h2><span class="dots">${[0,1,2].map(i => `<i class="${results[i]===true?'ok':results[i]===false?'no':''}"></i>`).join('')}</span></div>
+      <p class="muted">${round+1}번째 · 제한시간 ${sec(o.time)} · 틀리면 실패</p>
+      <div class="timer" id="tm"><i></i></div>
+      <div class="seq" id="seq">${seq.map(d => `<span class="tile">${arrowSvg(d)}</span>`).join('')}</div>
+      <div class="msg" id="msg">준비…</div>
+    </div>
+    <div class="grow"></div>
+    <div class="pad" id="pad">${[['u','up','위'],['l','left','왼쪽'],['r','right','오른쪽'],['d','down','아래']].map(([c,d,a]) => `<button class="${c}" data-d="${d}" aria-label="${a}">${arrowSvg(d)}</button>`).join('')}</div>`, '');
+  const my = token, tiles = [...layer.querySelectorAll('.tile')], bar = $('#tm i'), msg = $('#msg');
+  let pos = -1, start = 0, over = false;
+  const finish = (ok, why) => {
+    if (over) return; over = true; cancelAnimationFrame(rafId);
+    if (!ok && o.skill3 && !o.skill3Used){
+      o.skill3Used = true;
+      if (Math.random() < .3){ ok = true; why = '「한 번만 봐주세요」 발동! 성공 처리'; } else why += ' · 「한 번만 봐주세요」 불발';
+    }
+    msg.innerHTML = `<span class="${ok?'win':'lose'}">${why}</span>`; SND.play(ok ? 'ok' : 'bad');
+    if (!ok){ $('#seq').classList.add('shake'); meEl.src = IMG[pose('panic')]; }
+    setTimeout(() => { if (my===token) arrowGame({...o, results:[...results, ok]}); }, 950);
+  };
+  const press = d => {
+    if (over || pos < 0) return;
+    if (d === seq[pos]){ SND.play('key'); tiles[pos].className = 'tile done'; pos++; if (pos === seq.length) finish(true, '성공!'); else tiles[pos].classList.add('now'); }
+    else { tiles[pos].className = 'tile bad'; finish(false, '방향이 틀렸어요'); }
+  };
+  layer.querySelectorAll('#pad button').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); press(b.dataset.d); }));
+  keyHandler = e => { const m = {ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[e.key]; if (m){ e.preventDefault(); press(m); } };
+  setTimeout(() => {
+    if (my !== token) return;
+    msg.textContent = '시작!'; pos = 0; tiles[0].classList.add('now'); start = performance.now();
+    const tick = now => {
+      if (my !== token || over) return;
+      const left = 1 - (now - start) / (o.time*1000);
+      bar.style.transform = `scaleX(${Math.max(0,left)})`; $('#tm').classList.toggle('low', left < .3);
+      if (left <= 0) finish(false, '시간 초과'); else rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }, 700);
+}
+
+/* ================= quiz ================= */
+function quizGame(o){
+  const results = o.results || [], n = results.length;
+  if (n === o.qs.length){ o.onDone(results.filter(Boolean).length); return; }
+  const q = o.qs[n], t = o.time(q), opts = shuffle([q[1], ...q[2]]), gone = o.remove1 ? shuffle(q[2])[0] : null;
+  screen({...roomStage(o.room), me:pose(), meMode:'corner'}, `
+    <div class="glass">
+      <div class="gh"><h2>${o.title}</h2><span class="dots">${o.qs.map((_,i) => `<i class="${results[i]===true?'ok':results[i]===false?'no':''}"></i>`).join('')}</span></div>
+      <p class="muted">${n+1}번째 · 제한시간 ${sec(t)}${q[4]?' (긴 문제 1.3배)':''}${o.retry?' · 재도전':''}</p>
+      <div class="timer" id="tm"><i></i></div>
+    </div>
+    <div class="paper qcard"><span class="topic">${q[3]}</span>${esc(q[0])}</div>
+    <div class="opts">${opts.map((x,i) => `<button class="opt ${x===gone?'gone':''}" data-o="${esc(x)}" ${x===gone?'disabled':''}><span class="k">${i+1}</span><span>${esc(x)}</span></button>`).join('')}</div>
+    <div class="msg" id="msg"></div>`, '');
+  const my = token, bar = $('#tm i'), msg = $('#msg'), start = performance.now();
+  let over = false;
+  const finish = picked => {
+    if (over) return; over = true; cancelAnimationFrame(rafId);
+    const ok = picked === q[1];
+    layer.querySelectorAll('.opt').forEach(b => { if (b.dataset.o === q[1]) b.classList.add('right'); else if (b.dataset.o === picked) b.classList.add('wrong'); b.disabled = true; });
+    const miss = picked === null ? '시간 초과' : '오답'; SND.play(ok ? 'ok' : 'bad');
+    if (!ok){ meEl.src = IMG[pose('panic')]; }
+    if (!ok && o.skill4 && !o.skill4Used){
+      o.skill4Used = true;
+      if (Math.random() < .3){
+        msg.innerHTML = `<span class="win">「다시 한번 기회」 발동! 같은 문제 재도전</span>`;
+        setTimeout(() => { if (my===token) quizGame({...o, results, retry:true}); }, 1100); return;
+      }
+      msg.innerHTML = `<span class="lose">${miss} · 「다시 한번 기회」 불발</span>`;
+    } else msg.innerHTML = ok ? `<span class="win">정답!</span>` : `<span class="lose">${miss}</span>`;
+    setTimeout(() => { if (my===token) quizGame({...o, results:[...results, ok], retry:false}); }, 1300);
+  };
+  layer.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => finish(b.dataset.o)));
+  const tick = now => {
+    if (my !== token || over) return;
+    const left = 1 - (now - start) / (t*1000);
+    bar.style.transform = `scaleX(${Math.max(0,left)})`; $('#tm').classList.toggle('low', left < .3);
+    if (left <= 0) finish(null); else rafId = requestAnimationFrame(tick);
+  };
+  rafId = requestAnimationFrame(tick);
+}
+
+/* ================= 학년 승급전 (main quest) ================= */
+function mainStart(){
+  const g = GRADES[S.gi], at = RULES.arrowTime(S.gi, S.str, S.owned.includes(1)), n = RULES.arrowCount(S.owned);
+  const active = S.owned.filter(id => [1,2,3,4,9,10].includes(id));
+  screen({...roomStage('main'), me:pose(), meMode:'corner'}, `
+    <div class="glass center">
+      <span class="tag">${g.label} · 메인룸</span>
+      <h2 style="font-size:30px">학년 승급전</h2>
+      <p class="chalk">화살표 3번 + 퀴즈 3문제, 기회는 한 번뿐!</p>
+      <p class="muted">화살표 ${n}개 · ${sec(at)} / 퀴즈 난이도 ${g.diff} (일반·성경·교회생활)</p>
+      ${active.length ? `<p class="muted" style="margin-top:6px">적용 스킬: ${active.map(id => SKILLS[id].name).join(', ')}</p>` : ''}
+    </div>`, `<button class="btn" id="go">시작</button>`);
+  on('go', () => arrowGame({room:'main', title:`${g.label} 승급전 · 화살표`, count:n, time:at, skill3:S.owned.includes(3),
+    onDone: a => {
+      const qs = shuffle(RULES.pickSet(g.diff, S.used)); qs.forEach(q => S.used.push(q[0]));
+      quizGame({room:'main', title:`${g.label} 승급전 · 퀴즈`, qs, time:q => RULES.quizTime(S.gi, S.int, q[4], S.owned.includes(2)),
+        remove1:S.owned.includes(9), skill4:S.owned.includes(4), onDone: qn => report(a, qn)});
+    }}));
+}
+function report(a, qn){
+  const g = GRADES[S.gi], pts = RULES.mainScore(a, qn), last = S.gi === 5, react = RULES.reaction(pts);
+  S.scores.push(pts); SND.play({praise:'fanfare', base:'ok', cheer:'soft'}[react]);
+  const cum = S.scores.reduce((x,y)=>x+y,0), nextLabel = last ? '' : GRADES[S.gi+1].label;
+  const tpose = {praise:'teacher_praise', base:'teacher', cheer:'teacher_cheer'}[react];
+  screen({...roomStage('main'), npc:tpose, npcMode:'br', me:pose(react === 'praise' ? '' : 'panic'), meMode:'corner'}, `
+    <div class="paper sheet">
+      <h2>${g.label} 성적표</h2><p class="sub">${esc(S.name)} · ${CHARS[S.char].name} · ${g.event}</p>
+      <table><tr><td>화살표 ${a}/3 성공</td><td>${a*15}</td></tr><tr><td>퀴즈 ${qn}/3 정답</td><td>${qn*15}</td></tr>
+      <tr><td>모두 통과 보너스</td><td>${a===3&&qn===3?10:0}</td></tr><tr class="total"><td>${g.label} 점수</td><td>${pts}</td></tr></table>
+      <p class="note">누적 ${cum}점 · ${last ? '이제 졸업이에요' : `다음은 ${nextLabel}`}</p>
+    </div>
+    ${bubble(pick2(REACT[react]), 'l')}`,
+    `<button class="btn" id="next">${last ? '졸업식으로' : `${nextLabel}로 올라가기`}</button>`);
+  if (last) S.phase = 'done';
+  else { S.gi++; S.practiceLeft = 3; S.phase = S.gi === 3 ? 'mom' : 'intro'; }
+  persist();
+  on('next', route);
+}
+
+/* ================= 고1 진학 이벤트 ================= */
+function momEvent(){
+  const answers = shuffle(MOM.answers);
+  screen({...roomStage('main'), shade:true, npc:'mom', npcMode:'top', me:pose(), meMode:'corner'}, `
+    <div style="height:40%;flex:none"></div>
+    ${bubble(MOM.ask, '', '엄마')}
+    <div class="answers">${answers.map((x,i) => `<button class="answer" data-i="${MOM.answers.indexOf(x)}">${esc(x.t)}</button>`).join('')}</div>`, '');
+  layer.querySelectorAll('.answer').forEach(b => b.addEventListener('click', () => {
+    const ans = MOM.answers[+b.dataset.i], before = {str:S.str, int:S.int}, after = RULES.applyMom(S, ans);
+    S.str = after.str; S.int = after.int; S.phase = 'intro'; persist(); SND.play(ans.s + ans.i > 0 ? 'up' : 'bad');
+    const d = (k, n) => { const v = after[k] - before[k]; return v ? `${n} ${v>0?'+':''}${v}` : ''; };
+    const diff = [d('str','힘'), d('int','지능')].filter(Boolean).join(' · ') || '변화 없음';
+    const good = ans.s + ans.i > 0;
+    screen({...roomStage('main'), shade:true, npc:'mom', npcMode:'top', me:pose(good ? '' : 'panic'), meMode:'corner'}, `
+      <div style="height:40%;flex:none"></div>
+      <div class="glass center"><p class="muted">내 대답</p><p class="chalk">${esc(ans.t)}</p>
+      <p class="verdict ${good?'win':'lose'}" style="margin-top:6px">${diff}</p></div>`,
+      `<button class="btn" id="go">고1로 올라가기</button>`);
+    on('go', route);
+  }));
+}
+
+/* ================= ending ================= */
+function ending(){
+  const base = S.scores.reduce((a,b)=>a+b,0), bonus = S.owned.includes(8) ? 100 : 0, total = base + bonus, idx = RULES.ending(total);
+  const d = store.get(DEX, {}); const key = ENDINGS[idx].g; d[key] = d[key] || {}; d[key][S.char] = true; store.set(DEX, d);
+  const best = store.get(BEST, 0), isBest = total > best; if (isBest) store.set(BEST, total);
+  const run = S; store.del(SAVE); S = null;
+  endingScreen(idx, run.char, run.name, {base, bonus, total, isBest}, false);
+}
+function endingScreen(idx, ch, name, sc, preview){
+  const e = ENDINGS[idx], isF = e.g === 'F', isS = e.g === 'S';
+  SND.ending(e.g);
+  const npc = isF ? {npc:'teacher_cheer', npcMode:'bl'} : isS ? {npc:'teacher_praise', npcMode:'br'} : {};
+  screen({bg:e.bg, me: ch + (isF ? '' : '_adult'), meMode:'center', ...npc}, `
+    <div class="paper diploma ${isS?'s':''}">
+      <span class="stamp">${e.g}</span>
+      <div style="min-width:0">
+        <p class="eb">${e.g}등급 엔딩${preview?' · 미리보기':''}</p>
+        <h2>${e.name}</h2>
+        <p class="scene">${e.scene}</p>
+        <p class="line">${esc(e.line[ch].replace('{이름}', name))}</p>
+        <div class="score"><span>기본 <b>${sc.base}</b></span><span>스킬 보너스 <b>${sc.bonus}</b></span><span>최종 <b>${sc.total}</b></span></div>
+        ${sc.isBest ? `<p class="eb" style="color:var(--tie);margin-top:4px">개인 최고 기록!</p>` : ''}
+      </div>
+    </div>`,
+    preview ? `<button class="btn" id="back">다른 엔딩 보기</button><button class="link" id="home">처음으로</button>`
+            : `<button class="btn" id="again">다시 입학하기</button><div class="row"><button class="btn ghost" id="dex">엔딩 도감</button><button class="btn ghost" id="home">처음으로</button></div>`, false);
+  on('again', select); on('dex', dex); on('home', title); on('back', previewPicker);
+}
+
+/* ================= dex ================= */
+function dex(){
+  const d = store.get(DEX, {}), best = store.get(BEST, 0), seen = ENDINGS.filter(e => d[e.g]).length;
+  screen({bg:'bg_title', shade:true}, `
+    <div><h2 style="font-size:26px">엔딩 도감</h2><p class="muted">${seen}/6 발견 · 같은 등급도 캐릭터마다 문장이 달라요 · 개인 최고 ${best}점</p></div>
+    <div class="dex">${ENDINGS.map(e => { const s = !!d[e.g]; return `<div class="slot ${s?'seen':''}">
+      <span class="lt">${e.g}</span><h3>${s ? e.name : '???'}</h3><span class="range">${e.range}</span>
+      <div class="marks">${Object.entries(CHARS).map(([k,c]) => `<span class="${d[e.g]&&d[e.g][k]?'on':''}">${c.name}</span>`).join('')}</div></div>`; }).join('')}</div>`,
+    `<button class="btn ghost" id="home">처음으로</button>`, false);
+  on('home', title);
+}
+function previewPicker(){
+  let ei = 0, ch = 'str';
+  const draw = () => {
+    screen({bg:'bg_title', shade:true}, `
+      <div><h2 style="font-size:24px">엔딩 화면 미리보기</h2><p class="muted">문장과 배치를 확인하는 시험용 메뉴예요. 도감과 기록에는 남지 않아요.</p></div>
+      <div class="glass"><p class="tag">등급</p><div class="picker" style="margin-top:6px">${ENDINGS.map((e,i) => `<button data-e="${i}" aria-pressed="${i===ei}">${e.g}</button>`).join('')}</div>
+      <p class="tag" style="margin-top:12px">캐릭터</p><div class="picker" style="margin-top:6px">${Object.entries(CHARS).map(([k,c]) => `<button data-c="${k}" aria-pressed="${k===ch}">${c.name}</button>`).join('')}</div></div>`,
+      `<button class="btn" id="show">이 엔딩 보기</button><button class="link" id="home">처음으로</button>`, false);
+    layer.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => { ei = +b.dataset.e; draw(); }));
+    layer.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => { ch = b.dataset.c; draw(); }));
+    on('home', title);
+    on('show', () => { const v = [180,260,350,450,560,600][ei]; endingScreen(ei, ch, store.get(NAME,'') || '학생', {base:v, bonus:ei===5?100:0, total:ei===5?700:v, isBest:false}, true); });
+  };
+  draw();
+}
+
+/* ================= boot ================= */
+Object.values(IMG).forEach(src => { const i = new Image(); i.src = src; });
+
+/* Inside Telegram: load the Mini App SDK, fit the window, stop swipe-down from closing the
+   game mid-quest, then pull cloud saves before the title screen. Outside Telegram none of this runs. */
+function loadScript(src){
+  return new Promise(res => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = res; document.head.appendChild(s); setTimeout(res, 4000); });
+}
+function pullCloud(){
+  return new Promise(res => {
+    const t = setTimeout(res, 2500);
+    try{
+      TG.cloud.getItems(CLOUD_KEYS, (err, vals) => {
+        clearTimeout(t);
+        if (!err && vals){
+          const cv = k => { try{ return vals[k] ? JSON.parse(vals[k]) : undefined; }catch(e){ return undefined; } };
+          const lv = k => store.get(k, undefined);
+          const cd = cv(DEX), ld = lv(DEX);
+          if (cd || ld){ const m = {...(cd || {})}; Object.entries(ld || {}).forEach(([g,o]) => m[g] = {...(m[g] || {}), ...o}); store.set(DEX, m); }
+          const cb = cv(BEST), lb = lv(BEST); if (cb != null || lb != null) store.set(BEST, Math.max(cb || 0, lb || 0));
+          if (cv(TUTK) || lv(TUTK)) store.set(TUTK, true);
+          const cn = cv(NAME), ln = lv(NAME); if (ln || cn) store.set(NAME, ln || cn);
+          const cs = cv(SAVE), ls = lv(SAVE), pick = !ls ? cs : !cs ? ls : ((cs.t || 0) > (ls.t || 0) ? cs : ls);
+          if (pick) store.set(SAVE, pick);
+          const cso = cv('hsk_sound'); if (cso !== undefined && lv('hsk_sound') === undefined){ store.set('hsk_sound', cso); SND.on = cso; }
+        }
+        res();
+      });
+    }catch(e){ clearTimeout(t); res(); }
+  });
+}
+async function boot(){
+  if (inTelegram){
+    await loadScript('https://telegram.org/js/telegram-web-app.js');
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg){
+      TG.app = tg;
+      const at = v => { try{ return tg.isVersionAtLeast(v); }catch(e){ return false; } };
+      try{ tg.ready(); tg.expand(); }catch(e){}
+      try{ if (at('7.7')) tg.disableVerticalSwipes(); }catch(e){}
+      try{ if (at('6.1')){ tg.setHeaderColor('#18271F'); tg.setBackgroundColor('#18271F'); } }catch(e){}
+      if (at('6.9') && tg.CloudStorage){ TG.cloud = tg.CloudStorage; await pullCloud(); }
+    }
+  }
+  title();
+}
+boot();
+</script>
+
+</html>
